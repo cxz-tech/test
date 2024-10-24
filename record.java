@@ -345,4 +345,5 @@ class Transaction {
                 ", type='" + type + '\'' +
                 '}'; // 返回交易的字符串表示形式
     }
+//
 }
