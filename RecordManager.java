@@ -1,17 +1,16 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 
-public class record extends JFrame {
+public class RecordManager extends JFrame {
 
-    private final ArrayList<Transaction> transactions = new ArrayList<>();
+    private final ArrayList<Record> records = new ArrayList<>();
 
-    public record() {
+    public RecordManager() {
         setTitle("收支记录");
         setSize(600, 400);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -39,10 +38,10 @@ public class record extends JFrame {
         addIncomeButton.addActionListener(new ActionListener() { // 设置按钮监听器
             @Override
             public void actionPerformed(ActionEvent e) {
-                Transaction transaction = getTransactionDetails("收入", true); // 获取收入详情
-                if (transaction != null) { // 如果用户输入了有效数据
-                    transactions.add(transaction); // 添加到事务列表
-                    System.out.println("新收入：" + transaction); // 打印收入信息
+                Record record = getRecordDetails("收入", true); // 获取收入详情
+                if (record != null) { // 如果用户输入了有效数据
+                    records.add(record); // 添加到记录列表
+                    System.out.println("新收入：" + record); // 打印收入信息
                 }
             }
         });
@@ -53,16 +52,26 @@ public class record extends JFrame {
         addExpenseButton.addActionListener(new ActionListener() { // 设置按钮监听器
             @Override
             public void actionPerformed(ActionEvent e) {
-                Transaction transaction = getTransactionDetails("支出", false); // 获取支出详情
-                if (transaction != null) { // 如果用户输入了有效数据
-                    transactions.add(transaction); // 添加到事务列表
-                    System.out.println("新支出：" + transaction); // 打印支出信息
+                Record record = getRecordDetails("支出", false); // 获取支出详情
+                if (record != null) { // 如果用户输入了有效数据
+                    records.add(record); // 添加到记录列表
+                    System.out.println("新支出：" + record); // 打印支出信息
                 }
             }
         });
         centerPanel.add(addExpenseButton); // 将按钮添加到居中面板
 
-        // 添加查询按钮
+        // 添加展示账单按钮
+        JButton displayBillsButton = new JButton("展示所有账单");
+        displayBillsButton.addActionListener(new ActionListener() { // 设置按钮监听器
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                displayAllRecords(); // 显示所有账单记录
+            }
+        });
+        centerPanel.add(displayBillsButton); // 将按钮添加到居中面板
+
+        // 添加查询账单按钮
         JButton queryButton = new JButton("查询账单");
         queryButton.addActionListener(new ActionListener() { // 设置按钮监听器
             @Override
@@ -72,21 +81,11 @@ public class record extends JFrame {
         });
         centerPanel.add(queryButton); // 将按钮添加到居中面板
 
-        // 添加展示账单按钮
-        JButton displayBillsButton = new JButton("展示所有账单");
-        displayBillsButton.addActionListener(new ActionListener() { // 设置按钮监听器
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                displayAllBills(); // 显示所有账单记录
-            }
-        });
-        centerPanel.add(displayBillsButton); // 将按钮添加到居中面板
-
         setVisible(true); // 显示窗口
     }
 
-    // 获取并验证交易详情
-    private Transaction getTransactionDetails(String type, boolean isIncome) {
+    // 获取并验证记录详情
+    private Record getRecordDetails(String type, boolean isIncome) {
         JPanel inputPanel = new JPanel(); // 创建输入面板
         inputPanel.setLayout(new GridLayout(4, 2)); // 设置网格布局
 
@@ -130,25 +129,30 @@ public class record extends JFrame {
         double amount = 0.0;
         try {
             amount = Double.parseDouble(amountField.getText()); // 解析金额
-            if ((isIncome && amount <= 0) || (!isIncome && amount >= 0)) {
+            if (amount <= 0) {
                 JOptionPane.showMessageDialog(this, "金额必须为正数!");
                 return null; // 金额不符合要求
             }
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "金额输入错误，请输入有效的数字！");
             return null; // 金额输入格式错误
-        }
+        }//
 
         String category = categoryField.getText(); // 类别
         String remark = remarkField.getText(); // 备注
 
-        return new Transaction(date, amount, category, remark, type); // 返回交易对象
+        // 根据是否为收入决定金额的正负
+        if (!isIncome) {
+            amount = -amount; // 支出时金额取负值
+        }
+
+        return new Record(date, amount, category, remark, type); // 返回记录对象
     }
 
-    // 显示查询对话框
+    // 显示查询账单界面
     private void showQueryDialog() {
         JPanel queryPanel = new JPanel();
-        queryPanel.setLayout(new GridLayout(5, 2));
+        queryPanel.setLayout(new GridLayout(7, 2));
 
         JLabel dateFromLabel = new JLabel("开始日期 (yyyy-MM-dd):");
         JTextField dateFromField = new JTextField();
@@ -165,48 +169,83 @@ public class record extends JFrame {
         queryPanel.add(categoryLabel);
         queryPanel.add(categoryField);
 
-        JButton queryButton = new JButton("查询");
+        // 添加查询方式选择
+        JLabel methodLabel = new JLabel("查询方式:");
+        String[] methods = {"按日期", "按日期范围", "按类别"};
+        JComboBox<String> methodComboBox = new JComboBox<>(methods);
+        queryPanel.add(methodLabel);
+        queryPanel.add(methodComboBox);
+
+        JButton confirmButton = new JButton("确定");
         JButton clearButton = new JButton("清除");
         JPanel buttonPanel = new JPanel();
-        buttonPanel.add(queryButton);
+        buttonPanel.add(confirmButton);
         buttonPanel.add(clearButton);
         queryPanel.add(buttonPanel);
 
-        final JList<String> incomeList = new JList<>(); // 收入列表
-        final JList<String> expenseList = new JList<>(); // 支出列表
+        final JList<String> resultList = new JList<>(); // 结果列表
 
-        // 查询按钮动作
-        queryButton.addActionListener(new ActionListener() {
+        // 确认按钮动作
+        confirmButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                String method = (String) methodComboBox.getSelectedItem();
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
                 Date dateFrom = null, dateTo = null;
                 try {
-                    dateFrom = sdf.parse(dateFromField.getText());
-                    dateTo = sdf.parse(dateToField.getText());
+                    if (!dateFromField.getText().isEmpty()) {
+                        dateFrom = sdf.parse(dateFromField.getText());
+                    }
+                    if (!dateToField.getText().isEmpty()) {
+                        dateTo = sdf.parse(dateToField.getText());
+                    }
                 } catch (ParseException ex) {
-                    JOptionPane.showMessageDialog(record.this, "日期格式错误！");
+                    JOptionPane.showMessageDialog(RecordManager.this, "日期格式错误！");
                     return;
                 }
 
                 String category = categoryField.getText();
 
-                ArrayList<String> incomeResults = new ArrayList<>();
-                ArrayList<String> expenseResults = new ArrayList<>();
+                ArrayList<String> results = new ArrayList<>();
 
-                for (Transaction t : transactions) {
-                    if (t.getDate().after(dateFrom) && t.getDate().before(dateTo)
-                            && (category.isEmpty() || t.getCategory().equals(category))) {
-                        if ("收入".equals(t.getType())) { // 使用 getType 方法
-                            incomeResults.add(t.toChineseString());
-                        } else if ("支出".equals(t.getType())) { // 使用 getType 方法
-                            expenseResults.add(t.toChineseString());
+                switch (method) {
+                    case "按日期":
+                        if (dateFrom != null) {
+                            for (Record r : records) {
+                                if (r.getDate().equals(dateFrom) && (category.isEmpty() || r.getCategory().equals(category))) {
+                                    results.add(r.toChineseString());
+                                }
+                            }
+                        } else {
+                            JOptionPane.showMessageDialog(RecordManager.this, "请选择查询方式并输入相应信息！");
                         }
-                    }
+                        break;
+                    case "按日期范围":
+                        if (dateFrom != null && dateTo != null) {
+                            for (Record r : records) {
+                                if (r.getDate().after(dateFrom) && r.getDate().before(dateTo)
+                                        && (category.isEmpty() || r.getCategory().equals(category))) {
+                                    results.add(r.toChineseString());
+                                }
+                            }
+                        } else {
+                            JOptionPane.showMessageDialog(RecordManager.this, "请选择查询方式并输入相应信息！");
+                        }
+                        break;
+                    case "按类别":
+                        if (!category.isEmpty()) {
+                            for (Record r : records) {
+                                if (r.getCategory().equals(category)) {
+                                    results.add(r.toChineseString());
+                                }
+                            }
+                        } else {
+                            JOptionPane.showMessageDialog(RecordManager.this, "请选择查询方式并输入相应信息！");
+                        }
+                        break;
                 }
 
-                incomeList.setListData(incomeResults.toArray(new String[0]));
-                expenseList.setListData(expenseResults.toArray(new String[0]));
+                resultList.setListData(results.toArray(new String[0]));
             }
         });
 
@@ -217,95 +256,66 @@ public class record extends JFrame {
                 dateFromField.setText("");
                 dateToField.setText("");
                 categoryField.setText("");
-                incomeList.setListData(new String[0]);
-                expenseList.setListData(new String[0]);
+                resultList.setListData(new String[0]);
             }
         });
 
         // 创建查询结果窗口
         final JFrame queryResultFrame = new JFrame("查询结果");
         queryResultFrame.setSize(800, 600);
-
-        // 设置窗口相对于屏幕居中显示
-        queryResultFrame.setLocationRelativeTo(null);
-
+        queryResultFrame.setLocationRelativeTo(null); // 居中显示
         queryResultFrame.setLayout(new BorderLayout());
 
-        JPanel resultListPanel = new JPanel();
-        resultListPanel.setLayout(new GridLayout(2, 1));
-
-        JScrollPane incomeScrollPane = new JScrollPane(incomeList);
-        JScrollPane expenseScrollPane = new JScrollPane(expenseList);
-
-        resultListPanel.add(incomeScrollPane);
-        resultListPanel.add(expenseScrollPane);
+        JScrollPane resultScrollPane = new JScrollPane(resultList);
 
         queryResultFrame.add(queryPanel, BorderLayout.NORTH);
-        queryResultFrame.add(resultListPanel, BorderLayout.CENTER);
+        queryResultFrame.add(resultScrollPane, BorderLayout.CENTER);
 
-        int result = JOptionPane.showConfirmDialog(this, queryPanel,
-                "查询条件", JOptionPane.OK_CANCEL_OPTION);
-        if (result == JOptionPane.OK_OPTION) {
-            queryResultFrame.setVisible(true);
-        }
+        queryResultFrame.setVisible(true);
     }
 
     // 显示所有账单记录
-    private void displayAllBills() {
-        final JFrame allBillsFrame = new JFrame("所有账单记录");
-        allBillsFrame.setSize(800, 600);
+    private void displayAllRecords() {
+        final JFrame allRecordsFrame = new JFrame("所有账单记录");
+        allRecordsFrame.setSize(800, 600);
 
         // 设置窗口相对于屏幕居中显示
-        allBillsFrame.setLocationRelativeTo(null);
+        allRecordsFrame.setLocationRelativeTo(null);
 
-        allBillsFrame.setLayout(new BorderLayout());
+        allRecordsFrame.setLayout(new BorderLayout());
 
-        final JList<String> incomeList = new JList<>(); // 收入列表
-        final JList<String> expenseList = new JList<>(); // 支出列表
+        final JList<String> resultList = new JList<>(); // 结果列表
 
-        ArrayList<String> incomeResults = new ArrayList<>();
-        ArrayList<String> expenseResults = new ArrayList<>();
+        ArrayList<String> results = new ArrayList<>();
 
-        for (Transaction t : transactions) {
-            if ("收入".equals(t.getType())) { // 使用 getType 方法
-                incomeResults.add(t.toChineseString());
-            } else if ("支出".equals(t.getType())) { // 使用 getType 方法
-                expenseResults.add(t.toChineseString());
-            }
+        for (Record r : records) {
+            results.add(r.toChineseString());
         }
 
-        incomeList.setListData(incomeResults.toArray(new String[0]));
-        expenseList.setListData(expenseResults.toArray(new String[0]));
+        resultList.setListData(results.toArray(new String[0]));
 
-        JPanel resultListPanel = new JPanel();
-        resultListPanel.setLayout(new GridLayout(2, 1));
+        JScrollPane resultScrollPane = new JScrollPane(resultList);
 
-        JScrollPane incomeScrollPane = new JScrollPane(incomeList);
-        JScrollPane expenseScrollPane = new JScrollPane(expenseList);
+        allRecordsFrame.add(resultScrollPane, BorderLayout.CENTER);
 
-        resultListPanel.add(incomeScrollPane);
-        resultListPanel.add(expenseScrollPane);
-
-        allBillsFrame.add(resultListPanel, BorderLayout.CENTER);
-
-        allBillsFrame.setVisible(true);
+        allRecordsFrame.setVisible(true);
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> { // 使用事件调度线程启动程序
-            new record();
+            new RecordManager();
         });
     }
 }
 
-class Transaction {
+class Record {
     private Date date;
     private double amount;
     private String category;
     private String remark;
     private String type; // 收入 or 支出
 
-    public Transaction(Date date, double amount, String category, String remark, String type) {
+    public Record(Date date, double amount, String category, String remark, String type) {
         this.date = date;
         this.amount = amount;
         this.category = category;
@@ -322,14 +332,14 @@ class Transaction {
     }
 
     public String getType() { // 新增方法
-         return type;
+        return type;
     }
 
     // 返回中文格式的字符串表示形式
     public String toChineseString() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy年MM月dd日");
         return "日期: " + sdf.format(date) +
-                ", 金额: " + amount +
+                ", 金额: " + Math.abs(amount) +
                 ", 类别: " + category +
                 ", 备注: " + remark +
                 ", 类型: " + type;
@@ -337,13 +347,12 @@ class Transaction {
 
     @Override
     public String toString() {
-        return "Transaction{" +
+        return "Record{" +
                 "date=" + date +
                 ", amount=" + amount +
                 ", category='" + category + '\'' +
                 ", remark='" + remark + '\'' +
                 ", type='" + type + '\'' +
-                '}'; // 返回交易的字符串表示形式
+                '}'; // 返回记录的字符串表示形式
     }
-
 }
