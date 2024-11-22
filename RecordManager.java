@@ -1,6 +1,7 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.Date;
 public class RecordManager extends JFrame {
 
     private final ArrayList<Record> records = new ArrayList<>();
+    private double monthlyBudget = 0.0; // 月度预算
 
     public RecordManager() {
         setTitle("收支记录");
@@ -81,6 +83,26 @@ public class RecordManager extends JFrame {
         });
         centerPanel.add(queryButton); // 将按钮添加到居中面板
 
+        // 添加设置月度预算按钮
+        JButton setBudgetButton = new JButton("设置月度预算");
+        setBudgetButton.addActionListener(new ActionListener() { // 设置按钮监听器
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                setMonthlyBudget(); // 设置月度预算
+            }
+        });
+        centerPanel.add(setBudgetButton); // 将按钮添加到居中面板
+
+        // 添加查看月度统计报告按钮
+        JButton monthlyReportButton = new JButton("查看月度统计报告");
+        monthlyReportButton.addActionListener(new ActionListener() { // 设置按钮监听器
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                showMonthlyReport(); // 查看月度统计报告
+            }
+        });
+        centerPanel.add(monthlyReportButton); // 将按钮添加到居中面板
+
         setVisible(true); // 显示窗口
     }
 
@@ -136,7 +158,7 @@ public class RecordManager extends JFrame {
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "金额输入错误，请输入有效的数字！");
             return null; // 金额输入格式错误
-        }//
+        }
 
         String category = categoryField.getText(); // 类别
         String remark = remarkField.getText(); // 备注
@@ -301,58 +323,142 @@ public class RecordManager extends JFrame {
         allRecordsFrame.setVisible(true);
     }
 
+    // 设置月度预算
+    private void setMonthlyBudget() {
+        JPanel inputPanel = new JPanel();
+        inputPanel.setLayout(new GridLayout(1, 2));
+
+        JLabel budgetLabel = new JLabel("月度预算:");
+        JTextField budgetField = new JTextField();
+        inputPanel.add(budgetLabel);
+        inputPanel.add(budgetField);
+
+        int result = JOptionPane.showConfirmDialog(this, inputPanel,
+                "设置月度预算", JOptionPane.OK_CANCEL_OPTION);
+        if (result == JOptionPane.OK_OPTION) {
+            try {
+                monthlyBudget = Double.parseDouble(budgetField.getText());
+                JOptionPane.showMessageDialog(this, "月度预算设置成功！");
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "请输入有效的数字！");
+            }
+        }
+    }
+
+    // 查看月度统计报告
+    private void showMonthlyReport() {
+        JPanel reportPanel = new JPanel();
+        reportPanel.setLayout(new GridLayout(4, 2));
+
+        JLabel incomeLabel = new JLabel("总收入:");
+        JLabel incomeValue = new JLabel("0.00");
+        reportPanel.add(incomeLabel);
+        reportPanel.add(incomeValue);
+
+        JLabel expenseLabel = new JLabel("总支出:");
+        JLabel expenseValue = new JLabel("0.00");
+        reportPanel.add(expenseLabel);
+        reportPanel.add(expenseValue);
+
+        JLabel remainingLabel = new JLabel("剩余预算:");
+        JLabel remainingValue = new JLabel("0.00");
+        reportPanel.add(remainingLabel);
+        reportPanel.add(remainingValue);
+
+        double totalIncome = 0.0;
+        double totalExpense = 0.0;
+
+        // 计算当前月份的收入和支出
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM");
+        String currentMonth = sdf.format(new Date());
+
+        for (Record r : records) {
+            String recordMonth = sdf.format(r.getDate());
+            double amount = r.getAmount();
+
+            if (currentMonth.equals(recordMonth)) {
+                if (r.getType().equals("收入")) {
+                    totalIncome += amount;
+                } else if (r.getType().equals("支出")) {
+                    totalExpense += amount;
+                }
+            }
+        }
+
+        incomeValue.setText(String.format("%.2f", totalIncome));
+        expenseValue.setText(String.format("%.2f", -totalExpense));
+        remainingValue.setText(String.format("%.2f", monthlyBudget + totalIncome + totalExpense));
+
+        final JFrame reportFrame = new JFrame("月度统计报告");
+        reportFrame.setSize(400, 200);
+        reportFrame.setLocationRelativeTo(null); // 居中显示
+        reportFrame.setLayout(new BorderLayout());
+        reportFrame.add(reportPanel, BorderLayout.CENTER);
+
+        reportFrame.setVisible(true);
+    }
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> { // 使用事件调度线程启动程序
             new RecordManager();
         });
     }
-}
 
-class Record {
-    private Date date;
-    private double amount;
-    private String category;
-    private String remark;
-    private String type; // 收入 or 支出
+    // Record 类
+    private static class Record {
+        private Date date;
+        private double amount;
+        private String category;
+        private String remark;
+        private String type; // 收入 or 支出
 
-    public Record(Date date, double amount, String category, String remark, String type) {
-        this.date = date;
-        this.amount = amount;
-        this.category = category;
-        this.remark = remark;
-        this.type = type;
-    }
+        public Record(Date date, double amount, String category, String remark, String type) {
+            this.date = date;
+            this.amount = amount;
+            this.category = category;
+            this.remark = remark;
+            this.type = type;
+        }
 
-    public Date getDate() {
-        return date;
-    }
+        public Date getDate() {
+            return date;
+        }
 
-    public String getCategory() {
-        return category;
-    }
+        public double getAmount() {
+            return amount;
+        }
 
-    public String getType() { // 新增方法
-        return type;
-    }
+        public String getCategory() {
+            return category;
+        }
 
-    // 返回中文格式的字符串表示形式
-    public String toChineseString() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy年MM月dd日");
-        return "日期: " + sdf.format(date) +
-                ", 金额: " + Math.abs(amount) +
-                ", 类别: " + category +
-                ", 备注: " + remark +
-                ", 类型: " + type;
-    }
+        public String getRemark() {
+            return remark;
+        }
 
-    @Override
-    public String toString() {
-        return "Record{" +
-                "date=" + date +
-                ", amount=" + amount +
-                ", category='" + category + '\'' +
-                ", remark='" + remark + '\'' +
-                ", type='" + type + '\'' +
-                '}'; // 返回记录的字符串表示形式
+        public String getType() {
+            return type;
+        }
+
+        // 返回中文格式的字符串表示形式
+        public String toChineseString() {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy年MM月dd日");
+            return "日期: " + sdf.format(date) +
+                    ", 金额: " + Math.abs(amount) +
+                    ", 类别: " + category +
+                    ", 备注: " + remark +
+                    ", 类型: " + type;
+        }
+
+        @Override
+        public String toString() {
+            return "Record{" +
+                    "date=" + date +
+                    ", amount=" + amount +
+                    ", category='" + category + '\'' +
+                    ", remark='" + remark + '\'' +
+                    ", type='" + type + '\'' +
+                    '}';
+        }
     }
 }
